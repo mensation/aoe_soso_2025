@@ -1,6 +1,7 @@
 import json
 import os
 from collections import defaultdict
+from datetime import datetime, date, time
 
 import pandas as pd
 import streamlit as st
@@ -34,7 +35,7 @@ DEADLINES = {
     5: "January 4 - 23:59",
 }
 
-RESULTS_FILE = "results.json"
+RESULTS_FILE = os.path.join(os.path.dirname(__file__), "results.json")
 
 
 # -------------------------
@@ -44,18 +45,12 @@ RESULTS_FILE = "results.json"
 RULES_MD = """
 # AOE2 Standing Ovations League 2025
 
-## Participants & Seeding
+## Participants
 1. **Dahn**  
 2. **Manu**  
 3. **Homi**  
 4. **Tobi**  
 5. **Till**
-
-Seeding affects:
-- Higher/lower seed in each match  
-- Map ban order  
-- Home map pick order  
-- Civilization pick order  
 
 ---
 
@@ -142,7 +137,12 @@ def load_results():
             for m in MATCHES:
                 mid = str(m["id"])
                 if mid not in data:
-                    data[mid] = {"g1": "", "g2": "", "g3": ""}
+                    data[mid] = {"g1": "", "g2": "", "g3": "", "scheduled": ""}
+                else:
+                    data[mid].setdefault("g1", "")
+                    data[mid].setdefault("g2", "")
+                    data[mid].setdefault("g3", "")
+                    data[mid].setdefault("scheduled", "")
             return data
         except Exception:
             pass
@@ -150,7 +150,7 @@ def load_results():
     results = {}
     for m in MATCHES:
         mid = str(m["id"])
-        results[mid] = {"g1": "", "g2": "", "g3": ""}
+        results[mid] = {"g1": "", "g2": "", "g3": "", "scheduled": ""}
     return results
 
 
@@ -326,6 +326,15 @@ def scores_to_game_winners(a_maps, b_maps, player_a, player_b):
     return winners[:3]
 
 
+def parse_scheduled_value(value):
+    """Return (date, time) from stored string if possible."""
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt.date(), dt.time().replace(second=0, microsecond=0)
+    except Exception:
+        return None, None
+
+
 # -------------------------
 # Streamlit UI
 # -------------------------
@@ -359,37 +368,45 @@ st.markdown(
         color: var(--gold) !important;
         letter-spacing: 0.02em;
     }
-    .stTabs [data-baseweb="tab-list"] { gap: 6px; }
-    .stTabs [data-baseweb="tab"] {
-        padding-top: 7px;
-        padding-bottom: 7px;
-        border-radius: 12px;
-        background-color: #111827;
-        color: var(--text);
-        font-weight: 600;
-        border: 1px solid #1f2937;
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: #0f172a;
+        padding: 8px 10px;
+        border-radius: 14px;
+        border: 1px solid #1f2a40;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
     }
-    .stTabs [data-baseweb="tab"]:hover { background-color: #1f2937; }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 16px;
+        border-radius: 12px;
+        background-color: #0b1222;
+        color: var(--text);
+        font-weight: 700;
+        border: 1px solid #1f2937;
+        transition: all 0.15s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover { background-color: #152036; }
     .stTabs [aria-selected="true"] {
-        background-color: var(--gold) !important;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
         color: #0b1120 !important;
-        border-color: #f59e0b !important;
+        border-color: #fbbf24 !important;
+        box-shadow: 0 4px 16px rgba(251,191,36,0.35);
     }
     .round-header {
         color: var(--muted);
         font-weight: 600;
-        margin-top: 0.35rem;
-        margin-bottom: 0.15rem;
+        margin-top: 0.2rem;
+        margin-bottom: 0.05rem;
     }
     .round-divider {
         border-bottom: 1px solid #1f2a40;
-        margin: 0.35rem 0 0.6rem 0;
+        margin: 0.25rem 0 0.45rem 0;
     }
     .pairing-line {
         font-weight: 700;
         color: var(--text);
-        font-size: 1rem;
-        margin-bottom: 0.1rem;
+        font-size: 0.95rem;
+        margin-bottom: 0.05rem;
     }
     .seed-pill {
         display: inline-block;
@@ -407,8 +424,47 @@ st.markdown(
         color: var(--muted);
         font-size: 0.85rem;
     }
+    .muted-sm { color: var(--muted); font-size: 0.78rem; margin-bottom: -4px; }
     input[type=number] {
         text-align: center;
+    }
+    .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 0.75rem 0.9rem;
+        margin-bottom: 0.65rem;
+    }
+    .card h4 { margin-bottom: 0.4rem; }
+    .pill {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 10px;
+        background: #111827;
+        border: 1px solid #1f2a40;
+        color: var(--gold);
+        font-weight: 700;
+        margin: 0 6px 6px 0;
+        font-size: 0.9rem;
+    }
+    .map-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 6px;
+    }
+    .map-chip {
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: #111827;
+        border: 1px solid #1f2a40;
+    }
+    .stNumberInput, .stTextInput {
+        margin-top: -4px;
+        margin-bottom: -4px;
+    }
+    .stNumberInput>div>div>input {
+        padding-top: 4px;
+        padding-bottom: 4px;
     }
     </style>
     """,
@@ -429,7 +485,10 @@ tabs = st.tabs(["Dashboard", "Rules"])
 
 # ---------- Dashboard ----------
 with tabs[0]:
-    st.markdown("Enter map wins (best-of-three). Totals per match must be **<= 3**.")
+    st.markdown(
+        "Enter map wins (best-of-three). Totals per match must be **<= 3**. "
+        "Optional: add a scheduled date/time note per match."
+    )
     left_col, right_col = st.columns([1.8, 1.2], gap="medium")
 
     defaults_stats = compute_match_stats(results)
@@ -439,10 +498,6 @@ with tabs[0]:
         st.markdown("#### Matches")
         for rnd in rounds:
             deadline = DEADLINES.get(rnd, "No deadline set")
-            st.markdown(
-                f"<div class='round-header'>Round {rnd} - Deadline: {deadline}</div>",
-                unsafe_allow_html=True,
-            )
 
             round_matches = [m for m in MATCHES if m["round"] == rnd]
             for m in round_matches:
@@ -451,21 +506,22 @@ with tabs[0]:
                 B = m["B"]
                 a_key = f"match_{mid}_score_a"
                 b_key = f"match_{mid}_score_b"
+                schedule_key = f"match_{mid}_scheduled"
                 default_a = defaults_stats.get(mid, {}).get("A_maps", 0)
                 default_b = defaults_stats.get(mid, {}).get("B_maps", 0)
                 st.session_state.setdefault(a_key, default_a)
                 st.session_state.setdefault(b_key, default_b)
+                st.session_state.setdefault(schedule_key, results[mid].get("scheduled", ""))
 
-                row = st.columns([1.7, 0.8, 0.8, 0.8])
+                row = st.columns([1.1, 0.6, 0.6, 0.45, 0.9, 0.9])
                 with row[0]:
                     st.markdown(
-                        f"<div class='pairing-line'><span class='seed-pill'>A</span>{A} "
-                        f"<span class='muted'>vs</span> <span class='seed-pill seed-b'>B</span>{B}</div>",
+                        f"<div class='pairing-line'>Match {mid}: {A} vs {B}</div>"
+                        f"<div class='muted-sm'>R{rnd} - Deadline {deadline}</div>",
                         unsafe_allow_html=True,
                     )
-                    st.caption(f"Match {mid} - Round {rnd}")
                 with row[1]:
-                    st.caption(f"{A} maps")
+                    st.markdown(f"<div class='muted-sm'>{A}</div>", unsafe_allow_html=True)
                     a_score = st.number_input(
                         f"{A} maps",
                         min_value=0,
@@ -475,7 +531,7 @@ with tabs[0]:
                         label_visibility="collapsed",
                     )
                 with row[2]:
-                    st.caption(f"{B} maps")
+                    st.markdown(f"<div class='muted-sm'>{B}</div>", unsafe_allow_html=True)
                     b_score = st.number_input(
                         f"{B} maps",
                         min_value=0,
@@ -485,10 +541,32 @@ with tabs[0]:
                         label_visibility="collapsed",
                     )
                 with row[3]:
-                    st.caption("Total")
+                    st.markdown("<div class='muted-sm'>Total</div>", unsafe_allow_html=True)
                     st.markdown(f"**{a_score + b_score}/3**")
+                parsed_date, parsed_time = parse_scheduled_value(st.session_state[schedule_key])
+                default_date = parsed_date or date.today()
+                default_time = parsed_time or time(hour=21, minute=0)
+                with row[4]:
+                    st.markdown("<div class='muted-sm'>Date / Time</div>", unsafe_allow_html=True)
+                    sched_date = st.date_input(
+                        "Date",
+                        value=default_date,
+                        key=f"{schedule_key}_date",
+                        label_visibility="collapsed",
+                    )
+                with row[5]:
+                    st.markdown("<div class='muted-sm' style='visibility:hidden;'>spacer</div>", unsafe_allow_html=True)
+                    sched_time = st.time_input(
+                        "Time",
+                        value=default_time,
+                        key=f"{schedule_key}_time",
+                        step=900,
+                        label_visibility="collapsed",
+                    )
+                    schedule_val = f"{sched_date} {sched_time.strftime('%H:%M')}"
 
                 total_maps = a_score + b_score
+                results[mid]["scheduled"] = schedule_val.strip()
                 if total_maps > 3:
                     invalid_matches.append(mid)
                 else:
@@ -553,4 +631,87 @@ with tabs[0]:
 
 # ---------- Rules ----------
 with tabs[1]:
-    st.markdown(RULES_MD)
+    st.markdown("#### Rules & Info")
+    pills = " ".join([f"<span class='pill'>{p}</span>" for p in PLAYERS])
+    st.markdown(
+        f"""
+        <div class='card'>
+            <h4>Seeding (highest to lowest)</h4>
+            <div class='muted-sm' style='margin-bottom:6px;'>Order of players</div>
+            {pills}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_left, col_right = st.columns(2, gap="medium")
+
+    schedule_list = "".join(
+        f"<li><strong>Round {rnd}:</strong> {deadline}</li>"
+        for rnd, deadline in DEADLINES.items()
+    )
+
+    with col_left:
+        st.markdown(
+            f"""
+            <div class='card'>
+                <h4>Schedule</h4>
+                <ul style='margin-bottom: 0;'>
+                    {schedule_list}
+                </ul>
+                <div class='muted-sm'>Default time if needed: Tuesday 21:00.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <div class='card'>
+                <h4>Match Format</h4>
+                <ul style='margin-bottom: 0.3rem;'>
+                    <li>Best-of-three; all three games are played.</li>
+                    <li>Game 1: any agreed map, else random from Arabia / Arena / Nomad.</li>
+                    <li>Map bans (Game 2 & 3): higher seed bans 1, lower seed bans 1.</li>
+                    <li>Game 2: higher seed home map. Game 3: lower seed home map.</li>
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    map_pool = [
+        "Arabia",
+        "Arena",
+        "Nomad",
+        "Fish 'n' Fish",
+        "Enclosed",
+        "HyperRandom",
+        "Land Madness",
+        "Socotra",
+    ]
+
+    with col_right:
+        pool_html = """
+            <div class='card'>
+                <h4>Map Pool</h4>
+                <div class='map-grid'>
+        """
+        for m in map_pool:
+            pool_html += f"<div class='map-chip'>{m}</div>"
+        pool_html += "</div></div>"
+        st.markdown(pool_html, unsafe_allow_html=True)
+
+        st.markdown(
+            """
+            <div class='card'>
+                <h4>Civ Draft & Rules</h4>
+                <ul style='margin-bottom: 0.3rem;'>
+                    <li>Play on latest AOE2:DE patch; all ranked civs allowed.</li>
+                    <li>Each player picks two hidden civs.</li>
+                    <li>Pick order (snake): B -> A -> A -> B -> B -> A.</li>
+                    <li>After picks: each player bans one of the opponent's picked civs.</li>
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
