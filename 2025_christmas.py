@@ -1,5 +1,6 @@
 import json
 import os
+import random
 from collections import defaultdict
 from datetime import datetime, date, time
 
@@ -36,6 +37,18 @@ DEADLINES = {
 }
 
 RESULTS_FILE = os.path.join(os.path.dirname(__file__), "results.json")
+
+BASE_DIR = os.path.dirname(__file__)
+MAP_IMAGES = {
+    "Arabia": os.path.join(BASE_DIR, "arabia.png"),
+    "Arena": os.path.join(BASE_DIR, "arena.png"),
+    "Nomad": os.path.join(BASE_DIR, "nomad.png"),
+    # Additional map art available if needed elsewhere:
+    "Fish 'n' Fish": os.path.join(BASE_DIR, "fishnfish.png"),
+    "HyperRandom": os.path.join(BASE_DIR, "hyper random.png"),
+    "Land Madness": os.path.join(BASE_DIR, "land_madness.png"),
+    "Socotra": os.path.join(BASE_DIR, "socotra.png"),
+}
 
 
 # -------------------------
@@ -480,11 +493,31 @@ if "results" not in st.session_state:
 results = st.session_state["results"]
 rounds = sorted(set(m["round"] for m in MATCHES))
 
-tabs = st.tabs(["Dashboard", "Rules"])
+tabs = st.tabs(["HELPFULL", "Dashboard", "Rules"])
+
+# ---------- Helpful ----------
+with tabs[0]:
+    link_col, map_col = st.columns([2, 1], gap="small")
+    with link_col:
+        st.link_button("Civilization Draft Preset", "https://aoe2cm.net/preset/kzbHC")
+    with map_col:
+        if st.button("Random G1 Map (Arabia/Arena/Nomad)", type="primary", use_container_width=True):
+            st.session_state["random_g1_map"] = random.choice(["Arabia", "Arena", "Nomad"])
+        map_card = st.container(border=True)
+        if st.session_state.get("random_g1_map"):
+            picked = st.session_state["random_g1_map"]
+            img_url = MAP_IMAGES.get(picked)
+            map_card.markdown(f"**Game 1 Map:** {picked}")
+            if img_url:
+                map_card.image(img_url, caption=picked, width="stretch")
+            else:
+                map_card.caption("No preview available; showing text only.")
+        else:
+            map_card.caption("Roll to pick a Game 1 map.")
 
 
 # ---------- Dashboard ----------
-with tabs[0]:
+with tabs[1]:
     st.markdown(
         "Enter map wins (best-of-three). Totals per match must be **<= 3**. "
         "Optional: add a scheduled date/time note per match."
@@ -630,7 +663,7 @@ with tabs[0]:
 
 
 # ---------- Rules ----------
-with tabs[1]:
+with tabs[2]:
     st.markdown("#### Rules & Info")
     pills = " ".join([f"<span class='pill'>{p}</span>" for p in PLAYERS])
     st.markdown(
