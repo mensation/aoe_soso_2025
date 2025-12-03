@@ -3,6 +3,7 @@ import os
 import random
 from collections import defaultdict
 from datetime import datetime, date, time
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -36,18 +37,18 @@ DEADLINES = {
     5: "January 4 - 23:59",
 }
 
-RESULTS_FILE = os.path.join(os.path.dirname(__file__), "results.json")
+BASE_DIR = Path(__file__).resolve().parent
+RESULTS_FILE = BASE_DIR / "results.json"
 
-BASE_DIR = os.path.dirname(__file__)
 MAP_IMAGES = {
-    "Arabia": os.path.join(BASE_DIR, "arabia.png"),
-    "Arena": os.path.join(BASE_DIR, "arena.png"),
-    "Nomad": os.path.join(BASE_DIR, "nomad.png"),
+    "Arabia": BASE_DIR / "arabia.png",
+    "Arena": BASE_DIR / "arena.png",
+    "Nomad": BASE_DIR / "nomad.png",
     # Additional map art available if needed elsewhere:
-    "Fish 'n' Fish": os.path.join(BASE_DIR, "fishnfish.png"),
-    "HyperRandom": os.path.join(BASE_DIR, "hyper random.png"),
-    "Land Madness": os.path.join(BASE_DIR, "land_madness.png"),
-    "Socotra": os.path.join(BASE_DIR, "socotra.png"),
+    "Fish 'n' Fish": BASE_DIR / "fishnfish.png",
+    "HyperRandom": BASE_DIR / "hyper random.png",
+    "Land Madness": BASE_DIR / "land_madness.png",
+    "Socotra": BASE_DIR / "socotra.png",
 }
 
 
@@ -143,10 +144,9 @@ _For tiebreakers and current standings, see the **Standings** panel._
 
 def load_results():
     """Load results from JSON file, or initialize empty structure."""
-    if os.path.exists(RESULTS_FILE):
+    if RESULTS_FILE.exists():
         try:
-            with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
             for m in MATCHES:
                 mid = str(m["id"])
                 if mid not in data:
@@ -168,8 +168,11 @@ def load_results():
 
 
 def save_results(results):
-    with open(RESULTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
+    """Write results atomically to disk to avoid partial writes on Streamlit Cloud."""
+    tmp_path = RESULTS_FILE.with_suffix(".tmp")
+    RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    tmp_path.replace(RESULTS_FILE)
 
 
 # -------------------------
@@ -622,8 +625,11 @@ with tabs[1]:
             use_container_width=True,
             disabled=bool(invalid_matches),
         ):
-            save_results(st.session_state["results"])
-            st.success(f"Results saved to `{RESULTS_FILE}`.")
+            try:
+                save_results(st.session_state["results"])
+                st.success("Results saved.")
+            except Exception as exc:
+                st.error(f"Failed to save results: {exc}")
 
     standings = compute_standings(st.session_state["results"])
 
