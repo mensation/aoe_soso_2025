@@ -141,7 +141,7 @@ Each player has selected one personal map from this set to include in the pool.
 
 ---
 
-_For tiebreakers and current standings, see the **Standings** panel._a
+_For tiebreakers and current standings, see the **Standings** panel._
 """
 
 
