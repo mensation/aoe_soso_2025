@@ -573,7 +573,17 @@ tabs = st.tabs(["HELPFULL", "Dashboard", "Rules"])
 with tabs[0]:
     link_col, map_col = st.columns([2, 1], gap="small")
     with link_col:
-        st.link_button("Civilization Draft Preset", "https://aoe2cm.net/preset/kzbHC")
+        draft_box = st.container(border=True)
+        draft_box.markdown("**Civilization Draft Preset**")
+        draft_box.markdown(
+            "Click this button to create a civ draft for a new game. "
+            "The higher-seeded player should host the draft."
+        )
+        draft_box.link_button(
+            "Open Civ Draft (aoe2cm)",
+            "https://aoe2cm.net/preset/kzbHC",
+            use_container_width=True,
+        )
     with map_col:
         if st.button("Random G1 Map (Arabia/Arena/Nomad)", type="primary", use_container_width=True):
             st.session_state["random_g1_map"] = random.choice(["Arabia", "Arena", "Nomad"])
