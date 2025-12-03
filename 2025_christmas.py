@@ -179,12 +179,14 @@ def save_results(results):
     payload = json.dumps(results, indent=2)
     if GITHUB_TOKEN:
         gid = st.session_state.get("GIST_ID_CACHE") or GIST_ID
-        gid = save_results_to_gist(payload, GITHUB_TOKEN, gid)
-        if gid and gid != GIST_ID:
-            st.session_state["GIST_ID_CACHE"] = gid
-            st.info(f"New Gist created. Save this ID in secrets as GIST_ID: {gid}")
+        gid, err = save_results_to_gist(payload, GITHUB_TOKEN, gid)
         if gid:
+            if gid != GIST_ID and not st.session_state.get("GIST_ID_CACHE"):
+                st.session_state["GIST_ID_CACHE"] = gid
+                st.info(f"New Gist created. Save this ID in secrets as GIST_ID: {gid}")
             return
+        if err:
+            st.warning(f"Gist save failed; falling back to local file. Details: {err}")
 
     tmp_path = RESULTS_FILE.with_suffix(".tmp")
     RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -378,8 +380,8 @@ def load_results_from_gist(gist_id: str, token: str) -> Optional[dict]:
         return None
 
 
-def save_results_to_gist(payload: str, token: str, gist_id: Optional[str]) -> Optional[str]:
-    """Save results.json to an existing or new Gist. Returns gist_id on success."""
+def save_results_to_gist(payload: str, token: str, gist_id: Optional[str]):
+    """Save results.json to an existing or new Gist. Returns (gist_id, error_msg)."""
     headers = {"Authorization": f"token {token}"}
     try:
         if gist_id:
