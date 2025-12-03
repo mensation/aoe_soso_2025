@@ -391,7 +391,9 @@ def save_results_to_gist(payload: str, token: str, gist_id: Optional[str]):
                 json={"files": {GIST_FILENAME: {"content": payload}}},
                 timeout=10,
             )
-            return gist_id if resp.status_code in (200, 201) else None
+            if resp.status_code in (200, 201):
+                return gist_id, None
+            return None, f"Gist patch failed (status {resp.status_code})"
         else:
             resp = requests.post(
                 "https://api.github.com/gists",
@@ -404,10 +406,11 @@ def save_results_to_gist(payload: str, token: str, gist_id: Optional[str]):
                 timeout=10,
             )
             if resp.status_code in (200, 201):
-                return resp.json().get("id")
-    except Exception:
-        return None
-    return None
+                return resp.json().get("id"), None
+            return None, f"Gist create failed (status {resp.status_code})"
+    except Exception as exc:
+        return None, f"Gist save error: {exc}"
+    return None, "Unknown Gist save error"
 
 
 def parse_scheduled_value(value):
