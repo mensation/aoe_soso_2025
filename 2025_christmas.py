@@ -4,6 +4,9 @@ import random
 from collections import defaultdict
 from datetime import datetime, date, time
 from pathlib import Path
+from typing import Optional
+
+import requests
 
 import pandas as pd
 import streamlit as st
@@ -39,6 +42,10 @@ DEADLINES = {
 
 BASE_DIR = Path(__file__).resolve().parent
 RESULTS_FILE = BASE_DIR / "results.json"
+
+GIST_FILENAME = "results.json"
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", None)
+GIST_ID = st.secrets.get("GIST_ID", None)
 
 MAP_IMAGES = {
     "Arabia": BASE_DIR / "arabia.png",
@@ -144,34 +151,44 @@ _For tiebreakers and current standings, see the **Standings** panel._a
 
 def load_results():
     """Load results from JSON file, or initialize empty structure."""
-    if RESULTS_FILE.exists():
+    data = None
+    if GITHUB_TOKEN and GIST_ID:
+        data = load_results_from_gist(GIST_ID, GITHUB_TOKEN)
+    if data is None and RESULTS_FILE.exists():
         try:
             data = json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
-            for m in MATCHES:
-                mid = str(m["id"])
-                if mid not in data:
-                    data[mid] = {"g1": "", "g2": "", "g3": "", "scheduled": ""}
-                else:
-                    data[mid].setdefault("g1", "")
-                    data[mid].setdefault("g2", "")
-                    data[mid].setdefault("g3", "")
-                    data[mid].setdefault("scheduled", "")
-            return data
         except Exception:
-            pass
+            data = None
 
-    results = {}
+    if data is None:
+        data = {}
     for m in MATCHES:
         mid = str(m["id"])
-        results[mid] = {"g1": "", "g2": "", "g3": "", "scheduled": ""}
-    return results
+        if mid not in data:
+            data[mid] = {"g1": "", "g2": "", "g3": "", "scheduled": ""}
+        else:
+            data[mid].setdefault("g1", "")
+            data[mid].setdefault("g2", "")
+            data[mid].setdefault("g3", "")
+            data[mid].setdefault("scheduled", "")
+    return data
 
 
 def save_results(results):
     """Write results atomically to disk to avoid partial writes on Streamlit Cloud."""
+    payload = json.dumps(results, indent=2)
+    if GITHUB_TOKEN:
+        gid = st.session_state.get("GIST_ID_CACHE") or GIST_ID
+        gid = save_results_to_gist(payload, GITHUB_TOKEN, gid)
+        if gid and gid != GIST_ID:
+            st.session_state["GIST_ID_CACHE"] = gid
+            st.info(f"New Gist created. Save this ID in secrets as GIST_ID: {gid}")
+        if gid:
+            return
+
     tmp_path = RESULTS_FILE.with_suffix(".tmp")
     RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    tmp_path.write_text(payload, encoding="utf-8")
     tmp_path.replace(RESULTS_FILE)
 
 
@@ -340,6 +357,55 @@ def scores_to_game_winners(a_maps, b_maps, player_a, player_b):
     winners = [player_a] * a_maps + [player_b] * b_maps
     winners += [""] * (3 - len(winners))
     return winners[:3]
+
+
+def load_results_from_gist(gist_id: str, token: str) -> Optional[dict]:
+    """Fetch results.json content from a GitHub Gist. Returns dict or None on failure."""
+    try:
+        resp = requests.get(
+            f"https://api.github.com/gists/{gist_id}",
+            headers={"Authorization": f"token {token}"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return None
+        files = resp.json().get("files", {})
+        content = files.get(GIST_FILENAME, {}).get("content")
+        if not content:
+            return None
+        return json.loads(content)
+    except Exception:
+        return None
+
+
+def save_results_to_gist(payload: str, token: str, gist_id: Optional[str]) -> Optional[str]:
+    """Save results.json to an existing or new Gist. Returns gist_id on success."""
+    headers = {"Authorization": f"token {token}"}
+    try:
+        if gist_id:
+            resp = requests.patch(
+                f"https://api.github.com/gists/{gist_id}",
+                headers=headers,
+                json={"files": {GIST_FILENAME: {"content": payload}}},
+                timeout=10,
+            )
+            return gist_id if resp.status_code in (200, 201) else None
+        else:
+            resp = requests.post(
+                "https://api.github.com/gists",
+                headers=headers,
+                json={
+                    "description": "AOE2 league results storage",
+                    "public": False,
+                    "files": {GIST_FILENAME: {"content": payload}},
+                },
+                timeout=10,
+            )
+            if resp.status_code in (200, 201):
+                return resp.json().get("id")
+    except Exception:
+        return None
+    return None
 
 
 def parse_scheduled_value(value):
